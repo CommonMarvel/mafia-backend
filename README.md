@@ -6,7 +6,7 @@
 ## Import Step
 * git clone git@github.com:CommonMarvel/mafia-backend.git
 * open the project
-![](https://imgur.com/a/H5X3oqb)
-![](https://imgur.com/a/Yg41wyx)
+![](./doc/open-project1.png)
+![](./doc/open-project2.png)
 * uncheck "Create separate module per source set"
-![](https://imgur.com/a/suqby0t)
+![](./doc/import-project.png)
