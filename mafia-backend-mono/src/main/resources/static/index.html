@@ -107,24 +107,28 @@
         } while (account == null || account === "");
 
         $('form').submit(function () {
-            socket.emit('broadcast', $('#m').val());
+            var broadcast = {}
+            broadcast.content = $('#m').val();
+            socket.emit('Broadcast', JSON.stringify(broadcast));
             $('#m').val('');
             return false;
         });
-        socket.on('advert_info', function (msg) {
+        socket.on('System', function (msg) {
             $('#messages').append($('<li>').text(msg));
             window.scrollTo(0, document.body.scrollHeight);
         });
-        socket.on('broadcast', function (msg) {
+        socket.on('Broadcast', function (msg) {
             $('#messages').append($('<li>').text(msg));
             window.scrollTo(0, document.body.scrollHeight);
         });
-        socket.on('users', function (msg) {
+        socket.on('Users', function (msg) {
             $('#users').empty();
             $('#users').append(msg)
         });
 
-        socket.emit('login', {"account": account});
+        var loginMsg = {};
+        loginMsg.account = account;
+        socket.emit('Login', JSON.stringify(loginMsg));
     });
 </script>
 </body>
