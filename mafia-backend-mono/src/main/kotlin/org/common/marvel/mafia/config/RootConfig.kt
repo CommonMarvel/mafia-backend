@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 import javax.annotation.Resource
 
 data class LoginMsg(val account: String)
-data class BroadcastMsg(val content: String)
+data class BroadcastMsg(val msg: String)
 
 enum class Cmd {
 
@@ -31,7 +31,7 @@ enum class Cmd {
 class WebSocketConfig {
 
     @Resource
-    lateinit var connectorManager: ConnectorManager
+    private lateinit var connectorManager: ConnectorManager
 
     @Bean
     fun socketioServer(): SocketIOServer {
@@ -75,7 +75,7 @@ class WebSocketConfig {
 
             server.allClients.stream()
                     .forEach {
-                        it.sendEvent(Cmd.Broadcast.name, """[${connectorManager.sessionAccountMap.get(client)}]: ${broadcastMsg.content}""")
+                        it.sendEvent(Cmd.Broadcast.name, """[${connectorManager.sessionAccountMap.get(client)}]: ${broadcastMsg.msg}""")
                     }
         }
 
@@ -83,31 +83,15 @@ class WebSocketConfig {
             val gameProtocol = JsonUtils.readValue<GameProtocol>(data.toString())
             val gameRoom = connectorManager.idGameRoomMap.get(gameProtocol.roomId)
             when (gameProtocol.name) {
-                Type.Join.name -> {
-                    connectorManager.sessionQueue.offer(client)
-                }
-                Type.FetchCharacter.name -> {
-                    gameRoom?.receiveCmd(gameProtocol)
-                }
-                Type.RequestSwitchDay.name -> {
-                    gameRoom?.receiveCmd(gameProtocol)
-                }
-                Type.RequestSwitchNight.name -> {
-                    gameRoom?.receiveCmd(gameProtocol)
-                }
-                Type.RequestKill.name -> {
-                    gameRoom?.receiveCmd(gameProtocol)
-                }
-                Type.RequestBeat.name -> {
-                    gameRoom?.receiveCmd(gameProtocol)
-                }
+                Type.Join.name -> connectorManager.sessionQueue.offer(client)
+                else -> gameRoom?.receiveCmd(client, gameProtocol)
             }
         }
 
         return server
     }
 
-    fun genUserList(clients: List<SocketIOClient>): String {
+    private fun genUserList(clients: List<SocketIOClient>): String {
         val stringBuilder = StringBuilder()
 
         clients.stream()

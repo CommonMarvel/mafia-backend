@@ -13,6 +13,11 @@
             font: 13px Helvetica, Arial;
         }
 
+        button {
+            width: 50px;
+            height: 50px;
+        }
+
         form {
             background: #000;
             padding: 3px;
@@ -32,7 +37,7 @@
             width: 9%;
             background: rgb(130, 224, 255);
             border: none;
-            padding: 10px;
+            padding: 10px 10px 10px;
         }
 
         .left {
@@ -85,6 +90,25 @@
 <body>
 <div class="left">
     <h1>Board</h1>
+    <button id="fetch" class="ux">Fetch</button>
+    <button id="day" class="ux">Day</button>
+    <button id="night" class="ux">Night</button>
+    <button id="kill1" class="ux">kill1</button>
+    <button id="kill2" class="ux">kill2</button>
+    <button id="kill3" class="ux">kill3</button>
+    <button id="kill4" class="ux">kill4</button>
+    <button id="kill5" class="ux">kill5</button>
+    <button id="kill6" class="ux">kill6</button>
+    <button id="kill7" class="ux">kill7</button>
+    <button id="kill8" class="ux">kill8</button>
+    <button id="beat1" class="ux">beat1</button>
+    <button id="beat2" class="ux">beat2</button>
+    <button id="beat3" class="ux">beat3</button>
+    <button id="beat4" class="ux">beat4</button>
+    <button id="beat5" class="ux">beat5</button>
+    <button id="beat6" class="ux">beat6</button>
+    <button id="beat7" class="ux">beat7</button>
+    <button id="beat8" class="ux">beat8</button>
     <ul id="messages"></ul>
 </div>
 <div class="right">
@@ -92,8 +116,8 @@
     <ul id="users"></ul>
 </div>
 <form action="">
-    <input id="m" autocomplete="off"/>
-    <button>Send</button>
+    <input id="m" class="ux" autocomplete="off"/>
+    <button class="ux">Send</button>
 </form>
 <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
 <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
@@ -106,10 +130,79 @@
             account = prompt("Please enter your name", "");
         } while (account == null || account === "");
 
+        var roomId = "";
+
+        $('#fetch').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "FetchCharacter"}));
+        });
+        $('#day').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestSwitchDay"}));
+        });
+        $('#night').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestSwitchNight"}));
+        });
+        $('#kill1').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "1"}));
+        });
+        $('#kill2').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "2"}));
+        });
+        $('#kill3').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "3"}));
+        });
+        $('#kill4').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "4"}));
+        });
+        $('#kill5').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "5"}));
+        });
+        $('#kill6').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "6"}));
+        });
+        $('#kill7').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "7"}));
+        });
+        $('#kill8').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": "8"}));
+        });
+        $('#beat1').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "1"}));
+        });
+        $('#beat2').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "2"}));
+        });
+        $('#beat3').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "3"}));
+        });
+        $('#beat4').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "4"}));
+        });
+        $('#beat5').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "5"}));
+        });
+        $('#beat6').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "6"}));
+        });
+        $('#beat7').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "7"}));
+        });
+        $('#beat8').click(function () {
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestBeat", "beatWho": "8"}));
+        });
+
         $('form').submit(function () {
+            var msg = $('#m').val();
             var broadcast = {}
-            broadcast.content = $('#m').val();
-            socket.emit('Broadcast', JSON.stringify(broadcast));
+            broadcast.msg = msg;
+
+            if (msg.startsWith("[Room]")) {
+                socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RoomChat", "msg": msg}));
+            } else if (msg.startsWith("[Woo]")) {
+                socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "WooChat", "msg": msg}));
+            } else {
+                socket.emit('Broadcast', JSON.stringify(broadcast));
+            }
+
             $('#m').val('');
             return false;
         });
@@ -125,10 +218,29 @@
             $('#users').empty();
             $('#users').append(msg)
         });
+        socket.on('Game', function (msg) {
+            var gameProtocol = JSON.parse(msg);
+            roomId = gameProtocol.roomId;
+
+            $('#messages').append($('<li>').text(JSON.stringify(gameProtocol)));
+
+            var gameProtocolStr = JSON.stringify(gameProtocol);
+            var killWhoStr = "\"killWho\":\"" + account + "\"";
+            var beatWhoStr = "\"beatWho\":\"" + account + "\"";
+            if (gameProtocolStr.indexOf(killWhoStr) !== -1) {
+                $('.ux').attr('disabled', true);
+            }
+            if (gameProtocolStr.indexOf(beatWhoStr) !== -1) {
+                $('.ux').attr('disabled', true);
+            }
+
+            window.scrollTo(0, document.body.scrollHeight);
+        });
 
         var loginMsg = {};
         loginMsg.account = account;
         socket.emit('Login', JSON.stringify(loginMsg));
+        socket.emit('Game', JSON.stringify({"name": "Join"}));
     });
 </script>
 </body>

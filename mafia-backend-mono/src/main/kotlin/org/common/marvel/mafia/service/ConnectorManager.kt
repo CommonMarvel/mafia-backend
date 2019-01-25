@@ -24,6 +24,7 @@ class ConnectorManager {
 
     val sessionQueue = ConcurrentLinkedQueue<SocketIOClient>()
 
+    // TODO : variable
     private val roomCount = 8
 
     @Scheduled(cron = "*/10 * * * * *")
@@ -31,7 +32,7 @@ class ConnectorManager {
         val size = sessionQueue.size
         val count = size / roomCount
 
-        if (sessionQueue.size > roomCount) {
+        if (sessionQueue.size >= roomCount) {
             for (i in 1 until count + 1) {
                 val choosenSessionQueue = ConcurrentLinkedQueue<SocketIOClient>()
                 for (j in 1 until roomCount + 1) {
@@ -39,10 +40,10 @@ class ConnectorManager {
                 }
 
                 val id = UUID.randomUUID().toString()
-                idGameRoomMap.put(id, GameRoom(id, choosenSessionQueue.toList()))
+                idGameRoomMap.put(id, GameRoom(id, choosenSessionQueue.toList(), accountSessionMap, sessionAccountMap))
 
                 idGameRoomMap.get(id)!!.members.stream().forEach {
-                    it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.StartGame.name, "", "", "")))
+                    it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.StartGame.name)))
                 }
             }
         }
