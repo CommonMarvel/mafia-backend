@@ -25,7 +25,7 @@ class ConnectorManager {
     val sessionQueue = ConcurrentLinkedQueue<SocketIOClient>()
 
     // TODO : variable
-    private val roomCount = 8
+    private val roomCount = 4
 
     @Scheduled(cron = "*/10 * * * * *")
     fun matchRoom() {
