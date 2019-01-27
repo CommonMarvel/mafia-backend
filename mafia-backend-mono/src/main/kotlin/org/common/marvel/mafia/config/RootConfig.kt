@@ -2,10 +2,11 @@ package org.common.marvel.mafia.config
 
 import com.corundumstudio.socketio.SocketIOClient
 import com.corundumstudio.socketio.SocketIOServer
-import org.common.marvel.mafia.component.GameProtocol
 import org.common.marvel.mafia.component.Type
 import org.common.marvel.mafia.service.ConnectorManager
+import org.common.marvel.mafia.service.GameProtocol
 import org.common.marvel.mafia.util.JsonUtils
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
@@ -28,7 +29,9 @@ enum class Cmd {
 @Configuration
 @EnableScheduling
 @ComponentScan(value = ["org.common.marvel.mafia"])
-class WebSocketConfig {
+class RootConfig {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @Resource
     private lateinit var connectorManager: ConnectorManager
@@ -42,7 +45,7 @@ class WebSocketConfig {
         val server = SocketIOServer(config)
 
         server.addConnectListener {
-            connectorManager.sessionIdClientMap.put(it.sessionId.toString(), it)
+            connectorManager.onlineSession.add(it)
             it.sendEvent(Cmd.System.name, """[SYSTEM]: Hello ! I'm server ! """)
             server.allClients.stream()
                     .forEach {
@@ -51,7 +54,7 @@ class WebSocketConfig {
         }
 
         server.addDisconnectListener {
-            connectorManager.sessionIdClientMap.remove(it.sessionId.toString())
+            connectorManager.onlineSession.remove(it)
             server.allClients.stream()
                     .forEach {
                         it.sendEvent(Cmd.Users.name, genUserList(server.allClients.toList()))

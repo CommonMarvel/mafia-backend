@@ -8,8 +8,8 @@
 # gradle build docker and push to jianminhuang's docker hub
 ```bash
 ./gradlew buildDocker -x test
-docker tag common-marvel/mafia-backend:0.0.1 jianminhuang/mafia-backend:0.0.1
-docker push jianminhuang/mafia-backend:0.0.1
+docker tag common-marvel/mafia-backend-mono:0.0.1 jianminhuang/mafia-backend-mono:0.0.1
+docker push jianminhuang/mafia-backend-mono:0.0.1
 docker rmi $(docker images -f "dangling=true" -q)
 ```
 
