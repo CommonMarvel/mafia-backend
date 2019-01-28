@@ -42,18 +42,10 @@ class RootConfig {
         server.addConnectListener {
             connectorManager.onlineSession.add(it)
             it.sendEvent(Cmd.System.name, """[SYSTEM]: Hello ! I'm server ! """)
-//            server.allClients.stream()
-//                    .forEach {
-//                        it.sendEvent(Cmd.Users.name, genUserList(server.allClients.toList()))
-//                    }
         }
 
         server.addDisconnectListener {
             connectorManager.onlineSession.remove(it)
-//            server.allClients.stream()
-//                    .forEach {
-//                        it.sendEvent(Cmd.Users.name, genUserList(server.allClients.toList()))
-//                    }
         }
 
         server.addEventListener(Cmd.Login.name, String::class.java) { client, data, ackSender ->
@@ -62,10 +54,6 @@ class RootConfig {
             connectorManager.accountSessionMap[loginMsg.account] = client
             connectorManager.sessionAccountMap[client] = loginMsg.account
             client.sendEvent(Cmd.System.name, """[SYSTEM]: ${loginMsg.account} login success ! """)
-//            server.allClients.stream()
-//                    .forEach {
-//                        it.sendEvent(Cmd.Users.name, genUserList(server.allClients.toList()))
-//                    }
         }
 
         server.addEventListener(Cmd.Game.name, String::class.java) { client, data, ackSender ->
@@ -81,16 +69,5 @@ class RootConfig {
 
         return server
     }
-
-//    private fun genUserList(clients: List<SocketIOClient>): String {
-//        val stringBuilder = StringBuilder()
-//
-//        clients.stream()
-//                .map { v -> connectorManager.sessionAccountMap[v] }
-//                .filter { v -> v != null }
-//                .forEach { v -> stringBuilder.append("<li>$v</li>") }
-//
-//        return stringBuilder.toString()
-//    }
 
 }

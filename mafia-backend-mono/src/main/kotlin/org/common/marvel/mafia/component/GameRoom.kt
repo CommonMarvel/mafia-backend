@@ -12,14 +12,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.ArrayList
 import kotlin.streams.toList
 
-//enum class RoomStatus {
-//
-//    Start,
-//    Day,
-//    Night
-//
-//}
-
 enum class Type {
 
     RoomChat,
@@ -69,7 +61,7 @@ class GameRoom(val id: String,
             Type.RequestSwitchNight.name -> addCheckBroadcast(requestSwitchNightCount, protocol)
             Type.RequestKill.name -> addCheckBroadcast(requestKillCount, protocol)
             Type.RequestBeat.name -> addCheckBeat(requestBeatCount, protocol)
-            // else TODO
+            // TODO else
         }
     }
 

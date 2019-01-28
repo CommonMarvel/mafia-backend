@@ -89,21 +89,4 @@ class ConnectorManager {
         }
     }
 
-    // not enough
-//    @Scheduled(cron = "*/10 * * * * *")
-//    fun disconnectCheck() {
-//        idGameRoomMap.keys.stream()
-//                .forEach { v ->
-//                    idGameRoomMap.get(v)!!.membersInfo.forEach {
-//                        if (!onlineSession.contains(accountSessionMap.get(it.account))) {
-//                            it.status = "Disconnect"
-//                        }
-//                    }
-//
-//                    idGameRoomMap.get(v)!!.members.stream().forEach {
-//                        it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(v, Type.MembersInfo.name, idGameRoomMap.get(v)!!.membersInfo)))
-//                    }
-//                }
-//    }
-
 }
