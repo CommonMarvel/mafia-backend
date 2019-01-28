@@ -9,7 +9,7 @@ import javax.annotation.Resource
 class ConnectorServiceImpl : ConnectorService {
 
     @Resource
-    lateinit var socketIOServer : SocketIOServer
+    private lateinit var socketIOServer: SocketIOServer
 
     override fun start() {
         socketIOServer.start()

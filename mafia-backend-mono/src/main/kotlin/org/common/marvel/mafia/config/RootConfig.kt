@@ -1,86 +1,73 @@
 package org.common.marvel.mafia.config
 
-import com.corundumstudio.socketio.SocketIOClient
 import com.corundumstudio.socketio.SocketIOServer
+import org.common.marvel.mafia.component.Type
 import org.common.marvel.mafia.service.ConnectorManager
+import org.common.marvel.mafia.service.GameProtocol
+import org.common.marvel.mafia.util.JsonUtils
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
+import org.springframework.scheduling.annotation.EnableScheduling
 import javax.annotation.Resource
 
+data class LoginMsg(val account: String)
+
+enum class Cmd {
+
+    System,
+    Login,
+    Users,
+    Room,
+    Game,
+
+}
+
 @Configuration
+@EnableScheduling
 @ComponentScan(value = ["org.common.marvel.mafia"])
-class WebSocketConfig {
+class RootConfig {
 
     @Resource
-    lateinit var connectorManager: ConnectorManager
+    private lateinit var connectorManager: ConnectorManager
 
     @Bean
     fun socketioServer(): SocketIOServer {
         val config = com.corundumstudio.socketio.Configuration()
         config.port = 9092
+        config.socketConfig.isReuseAddress = true
 
         val server = SocketIOServer(config)
 
         server.addConnectListener {
-            val clientIp = it.remoteAddress
-            println("""$clientIp connected !""")
-
-            connectorManager.sessionIdClientMap.put(it.sessionId.toString(), it)
-
-            it.sendEvent("advert_info", """[SYSTEM]: $clientIp Hello ! I'm server ! """)
-            server.allClients.stream()
-                    .forEach {
-                        it.sendEvent("users", genUserLis(server.allClients.toList()))
-                    }
+            connectorManager.onlineSession.add(it)
+            it.sendEvent(Cmd.System.name, """[SYSTEM]: Hello ! I'm server ! """)
         }
 
         server.addDisconnectListener {
-            val clientIp = it.remoteAddress
-            println("""$clientIp disconnected !""")
-
-            connectorManager.sessionIdClientMap.remove(it.sessionId.toString())
-            server.allClients.stream()
-                    .forEach {
-                        it.sendEvent("users", genUserLis(server.allClients.toList()))
-                    }
+            connectorManager.onlineSession.remove(it)
         }
 
-        server.addEventListener("login", LoginMsg::class.java) { client, data, ackSender ->
-            connectorManager.accountSessionIdMap.put(data.account.orEmpty(), client.sessionId.toString())
-            connectorManager.sessionIdAccountMap.put(client.sessionId.toString(), data.account.orEmpty())
+        server.addEventListener(Cmd.Login.name, String::class.java) { client, data, ackSender ->
+            val loginMsg = JsonUtils.readValue<LoginMsg>(data.toString())
 
-            client.sendEvent("advert_info", """[SYSTEM]: ${data.account} login success ! """)
-            server.allClients.stream()
-                    .forEach {
-                        it.sendEvent("users", genUserLis(server.allClients.toList()))
-                    }
+            connectorManager.accountSessionMap[loginMsg.account] = client
+            connectorManager.sessionAccountMap[client] = loginMsg.account
+            client.sendEvent(Cmd.System.name, """[SYSTEM]: ${loginMsg.account} login success ! """)
         }
 
-        server.addEventListener("broadcast", BroadcastMsg::class.java) { client, data, ackSender ->
-            if (data.content != null && data.content!!.isNotEmpty()) {
-                server.allClients.stream()
-                        .forEach {
-                            it.sendEvent("broadcast", """[${connectorManager.sessionIdAccountMap.get(client.sessionId.toString())}]: ${data.content}""")
-                        }
+        server.addEventListener(Cmd.Game.name, String::class.java) { client, data, ackSender ->
+            val gameProtocol = JsonUtils.readValue<GameProtocol>(data.toString())
+            val gameRoom = connectorManager.idGameRoomMap[gameProtocol.roomId]
+            when (gameProtocol.name) {
+                Type.Join.name -> {
+                    connectorManager.sessionQueue.offer(client)
+                }
+                else -> gameRoom?.receiveCmd(client, gameProtocol)
             }
         }
 
         return server
     }
 
-    fun genUserLis(clients: List<SocketIOClient>): String {
-        val stringBuilder = StringBuilder()
-
-        clients.stream()
-                .map { v -> connectorManager.sessionIdAccountMap.get(v.sessionId.toString()) }
-                .filter { v -> v != null }
-                .forEach { v -> stringBuilder.append("<li>$v</li>") }
-
-        return stringBuilder.toString()
-    }
-
 }
-
-class LoginMsg(var account: String? = null)
-class BroadcastMsg(var content: String? = null)
