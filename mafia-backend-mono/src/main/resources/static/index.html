@@ -90,13 +90,11 @@
 <body>
 <div class="left">
     <h1>Board</h1>
-    <div id="buttons">
-        <button id="fetch" class="ux" disabled="true">Fetch</button>
-    </div>
+    <div id="buttons"></div>
     <ul id="messages"></ul>
 </div>
 <div class="right">
-    <h1>Online Users</h1>
+    <h1>Users</h1>
     <ul id="users"></ul>
 </div>
 <form action="">
@@ -106,7 +104,7 @@
 <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
 <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
 <script>
-    var socket = io.connect('http://192.168.0.108:9092');
+    var socket = io.connect('http://localhost:9092');
 
     function kill(name) {
         socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestKill", "killWho": name}));
@@ -125,22 +123,15 @@
 
     var roomId = "";
 
-    $('#fetch').click(function () {
-        socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "FetchCharacter"}));
-        $('#fetch').attr('disabled', true);
-    });
-
     $('form').submit(function () {
         var msg = $('#m').val();
         var broadcast = {}
         broadcast.msg = msg;
 
-        if (msg.startsWith("[Room]")) {
-            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RoomChat", "msg": msg}));
-        } else if (msg.startsWith("[Woo]")) {
+        if (msg.startsWith("[Woo]")) {
             socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "WooChat", "msg": msg}));
         } else {
-            socket.emit('Broadcast', JSON.stringify(broadcast));
+            socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RoomChat", "msg": msg}));
         }
 
         $('#m').val('');
@@ -150,7 +141,7 @@
         $('#messages').append($('<li>').text(msg));
         window.scrollTo(0, document.body.scrollHeight);
     });
-    socket.on('Broadcast', function (msg) {
+    socket.on('Room', function (msg) {
         $('#messages').append($('<li>').text(msg));
         window.scrollTo(0, document.body.scrollHeight);
     });
@@ -165,17 +156,20 @@
         $('#messages').append($('<li>').text(JSON.stringify(gameProtocol)));
 
         var startGameStr = "StartGame";
-        var characterStr = "Character";
         var requestDayStr = "RequestDay";
         var requestNightStr = "RequestNight";
         var killStr = "Kill";
         var beatStr = "Beat";
+        var humanWinStr = "HumanWin";
+        var wereWolfWinStr = "WerewolfWin";
         var killMeStr = "\"killWho\":\"" + account + "\"";
         var beatMeStr = "\"beatWho\":\"" + account + "\"";
-        if (msg.indexOf(startGameStr) !== -1) {
-            $('#fetch').attr('disabled', false);
+
+        if (msg.indexOf(humanWinStr) !== -1 || msg.indexOf(wereWolfWinStr) !== -1) {
+            $('#messages').append($('<li>').text("GAME OVER !!!!!!!!!!!!!!!! PRESS F5 TO RESTART"));
+            socket.disconnect()
         }
-        if (msg.indexOf(characterStr) !== -1) {
+        if (msg.indexOf(startGameStr) !== -1) {
             $('#buttons').empty();
             $('#buttons').append("<button id=\"day\" class=\"ux\">Day</button>");
             $('#day').click(function () {
@@ -187,43 +181,58 @@
             $('.left').css("background", "#fff989");
             $('#buttons').empty();
 
-            for (var i = 0; i < gameProtocol.nameList.length; i++) {
-                if (gameProtocol.nameList[i] !== account) {
-                    $('#buttons').append("<button id=\"kill" + i + "\" class=\"ux kill\" onclick=\"kill('" + gameProtocol.nameList[i] + "')\">Kill " + gameProtocol.nameList[i] + "</button>");
+            for (var i = 0; i < gameProtocol.membersInfo.length; i++) {
+                if (gameProtocol.membersInfo[i].account !== account && gameProtocol.membersInfo[i].status === "Alive") {
+                    $('#buttons').append("<button class=\"ux kill\" onclick=\"kill('" + gameProtocol.membersInfo[i].account + "')\">Kill " + gameProtocol.membersInfo[i].account + "</button>");
                 }
             }
         }
         if (msg.indexOf(killStr) !== -1) {
             $('#buttons').empty();
-            $('#buttons').append("<button id=\"night\" class=\"ux\">Night</button>");
+            for (var i = 0; i < gameProtocol.membersInfo.length; i++) {
+                if (gameProtocol.membersInfo[i].account === account && gameProtocol.membersInfo[i].status === "Alive") {
+                    $('#buttons').append("<button id=\"night\" class=\"ux\">Night</button>");
+                }
+            }
             $('#night').click(function () {
                 socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestSwitchNight"}));
-                $('#day').attr('disabled', true);
+                $('#night').attr('disabled', true);
             });
         }
         if (msg.indexOf(killMeStr) !== -1) {
-            $('.ux').attr('disabled', true);
+            $('.ux').remove();
         }
         if (msg.indexOf(requestNightStr) !== -1) {
             $('.left').css("background", "#777777");
             $('#buttons').empty();
 
-            for (var i = 0; i < gameProtocol.nameList.length; i++) {
-                if (gameProtocol.nameList[i] !== account) {
-                    $('#buttons').append("<button id=\"beat" + i + "\" class=\"ux beat\" onclick=\"beat('" + gameProtocol.nameList[i] + "')\">Beat " + gameProtocol.nameList[i] + "</button>");
+            var isWerewolf = false;
+            for (var i = 0; i < gameProtocol.membersInfo.length; i++) {
+                if (gameProtocol.membersInfo[i].account === account && gameProtocol.membersInfo[i].character === "Werewolf") {
+                    isWerewolf = true;
+                }
+            }
+
+            for (var i = 0; i < gameProtocol.membersInfo.length; i++) {
+                if (isWerewolf && gameProtocol.membersInfo[i].account !== account && gameProtocol.membersInfo[i].status === "Alive") {
+                    $('#buttons').append("<button class=\"ux beat\" onclick=\"beat('" + gameProtocol.membersInfo[i].account + "')\">Beat " + gameProtocol.membersInfo[i].account + "</button>");
                 }
             }
         }
         if (msg.indexOf(beatStr) !== -1) {
             $('#buttons').empty();
-            $('#buttons').append("<button id=\"day\" class=\"ux\">Day</button>");
-            $('#night').click(function () {
+            for (var i = 0; i < gameProtocol.membersInfo.length; i++) {
+                if (gameProtocol.membersInfo[i].account === account && gameProtocol.membersInfo[i].status === "Alive") {
+                    $('#buttons').append("<button id=\"day\" class=\"ux\">Day</button>");
+                }
+            }
+            $('#day').click(function () {
                 socket.emit('Game', JSON.stringify({"roomId": roomId, "name": "RequestSwitchDay"}));
                 $('#day').attr('disabled', true);
             });
         }
         if (msg.indexOf(beatMeStr) !== -1) {
-            $('.ux').attr('disabled', true);
+            $('.ux').remove();
         }
 
         window.scrollTo(0, document.body.scrollHeight);

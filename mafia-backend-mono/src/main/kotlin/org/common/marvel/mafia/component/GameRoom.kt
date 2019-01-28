@@ -2,9 +2,11 @@ package org.common.marvel.mafia.component
 
 import com.corundumstudio.socketio.SocketIOClient
 import org.common.marvel.mafia.config.Cmd
+import org.common.marvel.mafia.service.Character
 import org.common.marvel.mafia.service.GameProtocol
 import org.common.marvel.mafia.service.MemberInfo
 import org.common.marvel.mafia.util.JsonUtils
+import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.ArrayList
@@ -32,7 +34,9 @@ enum class Type {
     RequestDay,
     RequestNight,
     Kill,
-    Beat
+    Beat,
+    HuamnWin,
+    WerewolfWin
 
 }
 
@@ -42,8 +46,10 @@ class GameRoom(val id: String,
                val sessionAccountMap: HashMap<SocketIOClient, String>,
                val membersInfo: List<MemberInfo>) {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     private var membersCount = members.size
-    private var werewolfsCount = 0
+    var werewolfsCount = 0
 
     private val requestSwitchDayCount = AtomicInteger()
     private val requestSwitchNightCount = AtomicInteger()
@@ -51,7 +57,6 @@ class GameRoom(val id: String,
     private val requestBeatCount = AtomicInteger()
 
     private val deadSessionList = ArrayList<SocketIOClient>()
-    private val werewolfSessionMembers = ArrayList<SocketIOClient>()
 
     private val killVoteList = ArrayList<String>()
     private val beatVoteList = ArrayList<String>()
@@ -60,89 +65,174 @@ class GameRoom(val id: String,
         when (protocol.name) {
             Type.RoomChat.name -> handleRoomChat(client, protocol)
             Type.WooChat.name -> handleWooChat(client, protocol)
-            Type.RequestSwitchDay.name -> addCheckBroadcast(client, requestSwitchDayCount, protocol)
-            Type.RequestSwitchNight.name -> addCheckBroadcast(client, requestSwitchNightCount, protocol)
-            Type.RequestKill.name -> addCheckBroadcast(client, requestKillCount, protocol)
-            Type.RequestBeat.name -> addCheckBroadcast(client, requestBeatCount, protocol)
+            Type.RequestSwitchDay.name -> addCheckBroadcast(requestSwitchDayCount, protocol)
+            Type.RequestSwitchNight.name -> addCheckBroadcast(requestSwitchNightCount, protocol)
+            Type.RequestKill.name -> addCheckBroadcast(requestKillCount, protocol)
+            Type.RequestBeat.name -> addCheckBeat(requestBeatCount, protocol)
             // else TODO
         }
     }
 
     private fun handleRoomChat(client: SocketIOClient, protocol: GameProtocol) {
         members.stream().forEach {
-            it.sendEvent(Cmd.Broadcast.name, """[${sessionAccountMap.get(client)}]: ${protocol.msg}""")
+            it.sendEvent(Cmd.Room.name, """[${sessionAccountMap[client]}]: ${protocol.msg}""")
         }
     }
 
     private fun handleWooChat(client: SocketIOClient, protocol: GameProtocol) {
-        werewolfSessionMembers.stream().forEach {
-            it.sendEvent(Cmd.Broadcast.name, """[${sessionAccountMap.get(client)}]: ${protocol.msg}""")
-        }
+        membersInfo.filter { it.character!!.equals(Character.Werewolf.name) }
+                .map { accountSessionMap[it.account] }
+                .forEach {
+                    it!!.sendEvent(Cmd.Room.name, """[${sessionAccountMap[client]}]: ${protocol.msg}""")
+                }
     }
 
-    private fun addCheckBroadcast(client: SocketIOClient, cmdCount: AtomicInteger, protocol: GameProtocol) {
+    private fun addCheckBroadcast(cmdCount: AtomicInteger, protocol: GameProtocol) {
         val addAndGet = cmdCount.addAndGet(1)
 
         when (protocol.name) {
             Type.RequestKill.name -> killVoteList.add(protocol.killWho!!)
-            Type.RequestBeat.name -> beatVoteList.add(protocol.beatWho!!)
         }
 
-        if (addAndGet.equals(membersCount)) {
+        if (addAndGet == membersCount) {
             cmdCount.addAndGet(-1 * membersCount)
 
             when (protocol.name) {
                 Type.RequestSwitchDay.name -> processRequestSwitchDayCmd(members)
                 Type.RequestSwitchNight.name -> processRequestSwitchNightCmd(members)
                 Type.RequestKill.name -> processRequestKillCmd(members)
-                Type.RequestBeat.name -> processRequestBeatCmd(members)
             }
+        }
+    }
+
+    private fun addCheckBeat(cmdCount: AtomicInteger, protocol: GameProtocol) {
+        val addAndGet = cmdCount.addAndGet(1)
+
+        beatVoteList.add(protocol.beatWho!!)
+
+        if (addAndGet == werewolfsCount) {
+            cmdCount.addAndGet(-1 * werewolfsCount)
+
+            processRequestBeatCmd(members)
         }
     }
 
     private fun processRequestSwitchDayCmd(members: List<SocketIOClient>) {
         members.stream().forEach {
-            it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.RequestDay.name, membersInfo)))
+            if (!deadSessionList.contains(it)) {
+                it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.RequestDay.name, membersInfo)))
+            }
         }
     }
 
     private fun processRequestSwitchNightCmd(members: List<SocketIOClient>) {
         members.stream().forEach {
-            it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.RequestNight.name, membersInfo)))
+            if (!deadSessionList.contains(it)) {
+                it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.RequestNight.name, membersInfo)))
+            }
         }
     }
 
     private fun processRequestKillCmd(members: List<SocketIOClient>) {
         /* sum the vote result  */
         val killSumPairList = killVoteList.groupBy { v -> v }.entries.stream().map { v -> Pair(v.key, v.value.size) }.sorted { o1, o2 -> o2.second - o1.second }.toList()
-        members.stream().forEach {
-            it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.Kill.name, membersInfo, killSumPairList.get(0).first)))
+        if (killSumPairList.size == 2 && killSumPairList[0].second == 1 && killSumPairList[1].second == 1) {
+            log.info("skippppp ...")
+
+            members.stream().forEach {
+                it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.Kill.name, membersInfo, "Nobody")))
+            }
+        } else {
+            val sessionOfDead = accountSessionMap[killSumPairList[0].first]!!
+
+            val werewolfSessionMembers = membersInfo.filter { it.character!!.equals(Character.Werewolf.name) }
+                    .map { accountSessionMap[it.account] }
+                    .toList()
+
+            deadSessionList.add(sessionOfDead)
+            membersCount -= 1
+            if (werewolfSessionMembers.contains(sessionOfDead)) {
+                werewolfsCount -= 1
+            }
+
+            membersInfo.forEach {
+                if (accountSessionMap[it.account]!! == sessionOfDead) {
+                    it.status = "Dead"
+                }
+            }
+
+            members.stream().forEach {
+                it.sendEvent(Cmd.Users.name, genUserList(membersInfo))
+                it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.Kill.name, membersInfo, killSumPairList[0].first)))
+            }
+
+            killVoteList.clear()
+
+            val aliveHumanSize = membersInfo.filter { it.character == Character.Human.name && it.status == "Alive" }.size
+            if (membersCount == aliveHumanSize) {
+                members.stream().forEach {
+                    it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.HuamnWin.name, membersInfo)))
+                }
+            }
+            val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == "Alive" }.size
+            if (membersCount == werewolfsCount && membersCount == aliveWerewolfSize) {
+                members.stream().forEach {
+                    it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.WerewolfWin.name, membersInfo)))
+                }
+            }
         }
-
-        val sessionOfDead = accountSessionMap.get(killSumPairList.get(0).first)!!
-
-        deadSessionList.add(sessionOfDead)
-        membersCount--
-        if (werewolfSessionMembers.contains(sessionOfDead)) {
-            werewolfsCount--
-        }
-
-        killVoteList.clear()
     }
 
     private fun processRequestBeatCmd(members: List<SocketIOClient>) {
         /* sum the vote result  */
         val beatSumPairList = beatVoteList.groupBy { v -> v }.entries.stream().map { v -> Pair(v.key, v.value.size) }.sorted { o1, o2 -> o2.second - o1.second }.toList()
-        members.stream().forEach {
-            it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.Beat.name, membersInfo, "", beatSumPairList.get(0).first)))
-        }
 
-        val sessionOfDead = accountSessionMap.get(beatSumPairList.get(0).first)!!
+        val sessionOfDead = accountSessionMap[beatSumPairList[0].first]!!
 
         deadSessionList.add(sessionOfDead)
-        membersCount--
+        membersCount -= 1
+
+        membersInfo.forEach {
+            if (accountSessionMap[it.account]!! == sessionOfDead) {
+                it.status = "Dead"
+            }
+        }
+
+        members.stream().forEach {
+            it.sendEvent(Cmd.Users.name, genUserList(membersInfo))
+            it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.Beat.name, membersInfo, "", beatSumPairList[0].first)))
+        }
 
         beatVoteList.clear()
+
+        val aliveHumanSize = membersInfo.filter { it.character == Character.Human.name && it.status == "Alive" }.size
+        if (membersCount == aliveHumanSize) {
+            members.stream().forEach {
+                it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.HuamnWin.name, membersInfo)))
+            }
+        }
+        val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == "Alive" }.size
+        if (membersCount == werewolfsCount && membersCount == aliveWerewolfSize) {
+            members.stream().forEach {
+                it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(id, Type.WerewolfWin.name, membersInfo)))
+            }
+        }
+    }
+
+    private fun genUserList(membersInfo: List<MemberInfo>): String {
+        val stringBuilder = StringBuilder()
+
+        membersInfo.stream()
+                .map { v ->
+                    if (v.status == "Alive") {
+                        v.account
+                    } else {
+                        v.account + " -> " + v.character
+                    }
+                }
+                .forEach { v -> stringBuilder.append("<li>$v</li>") }
+
+        return stringBuilder.toString()
     }
 
 }

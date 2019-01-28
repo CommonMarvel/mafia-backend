@@ -51,7 +51,6 @@ class ConnectorManager {
     fun matchRoom() {
         val size = sessionQueue.size
         val count = size / roomMemberCount
-
         if (sessionQueue.size >= roomMemberCount) {
             for (i in 1 until count + 1) {
                 /* take element you need */
@@ -63,7 +62,7 @@ class ConnectorManager {
                 /* create session character map */
                 val sessionCharacterMap = HashMap<SocketIOClient, String>()
                 choosenSessionQueue.stream().forEach {
-                    sessionCharacterMap.put(it, Character.Human.name)
+                    sessionCharacterMap[it] = Character.Human.name
                 }
                 val chooseSet = HashSet<Int>()
                 chooseSet.add(random.nextInt(choosenSessionQueue.size))
@@ -71,15 +70,16 @@ class ConnectorManager {
                     chooseSet.add(random.nextInt(choosenSessionQueue.size))
                 }
                 chooseSet.stream().forEach {
-                    sessionCharacterMap.put(choosenSessionQueue.toList().get(it), Character.Werewolf.name)
+                    sessionCharacterMap[choosenSessionQueue.toList()[it]] = Character.Werewolf.name
                 }
 
                 /* create GameRoom and member infos */
                 val id = UUID.randomUUID().toString()
                 val memberInfos = choosenSessionQueue.stream()
-                        .map { v -> MemberInfo(sessionAccountMap.get(v), sessionCharacterMap.get(v), "Alive") }
+                        .map { v -> MemberInfo(sessionAccountMap[v], sessionCharacterMap.get(v), "Alive") }
                         .toList()
-                idGameRoomMap.put(id, GameRoom(id, choosenSessionQueue.toList(), accountSessionMap, sessionAccountMap, memberInfos))
+                idGameRoomMap[id] = GameRoom(id, choosenSessionQueue.toList(), accountSessionMap, sessionAccountMap, memberInfos)
+                idGameRoomMap[id]!!.werewolfsCount = werewolfMemberCount
 
                 /* server send StartGame Cmd */
                 choosenSessionQueue.stream().forEach {
@@ -90,20 +90,20 @@ class ConnectorManager {
     }
 
     // not enough
-    @Scheduled(cron = "*/10 * * * * *")
-    fun disconnectCheck() {
-        idGameRoomMap.keys.stream()
-                .forEach { v ->
-                    idGameRoomMap.get(v)!!.membersInfo.forEach {
-                        if (!onlineSession.contains(accountSessionMap.get(it.account))) {
-                            it.status = "Disconnect"
-                        }
-                    }
-
-                    idGameRoomMap.get(v)!!.members.stream().forEach {
-                        it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(v, Type.MembersInfo.name, idGameRoomMap.get(v)!!.membersInfo)))
-                    }
-                }
-    }
+//    @Scheduled(cron = "*/10 * * * * *")
+//    fun disconnectCheck() {
+//        idGameRoomMap.keys.stream()
+//                .forEach { v ->
+//                    idGameRoomMap.get(v)!!.membersInfo.forEach {
+//                        if (!onlineSession.contains(accountSessionMap.get(it.account))) {
+//                            it.status = "Disconnect"
+//                        }
+//                    }
+//
+//                    idGameRoomMap.get(v)!!.members.stream().forEach {
+//                        it.sendEvent(Cmd.Game.name, JsonUtils.writeValueAsString(GameProtocol(v, Type.MembersInfo.name, idGameRoomMap.get(v)!!.membersInfo)))
+//                    }
+//                }
+//    }
 
 }
