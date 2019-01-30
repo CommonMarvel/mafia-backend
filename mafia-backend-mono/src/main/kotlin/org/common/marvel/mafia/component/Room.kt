@@ -4,6 +4,7 @@ import com.corundumstudio.socketio.SocketIOClient
 import org.common.marvel.mafia.config.Channel
 import org.common.marvel.mafia.util.JsonUtils
 import org.slf4j.LoggerFactory
+import java.time.LocalDateTime
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
@@ -46,6 +47,7 @@ enum class Type {
     Beat,
     HumanWin,
     WerewolfWin,
+    None,
 
 }
 
@@ -87,6 +89,8 @@ class Room(val id: String,
     private val requestKillCount = AtomicInteger()
     private val requestBeatCount = AtomicInteger()
 
+    private var lastAction: Pair<String, LocalDateTime> = Pair(Type.None.name, LocalDateTime.now())
+
     private val deadSessionList = ArrayList<SocketIOClient>()
 
     private val killVoteList = ArrayList<String>()
@@ -104,7 +108,19 @@ class Room(val id: String,
         }
     }
 
-    // TODO : force step
+    fun timeoutExecute() {
+        if (lastAction.first != Type.None.name && LocalDateTime.now().isAfter(lastAction.second)) {
+            when (lastAction.first) {
+                Type.RequestStartGame.name -> processRequestStartGameCmd()
+                Type.RequestSwitchDay.name -> processRequestSwitchDayCmd()
+                Type.RequestSwitchNight.name -> processRequestSwitchNightCmd()
+                Type.RequestKill.name -> processRequestKillCmd(members)
+                Type.RequestBeat.name -> processRequestBeatCmd(members)
+            }
+
+            lastAction = Pair(Type.None.name, LocalDateTime.now())
+        }
+    }
 
     private fun handleRoomChat(client: SocketIOClient, protocol: Protocol) {
         members.forEach {
@@ -118,13 +134,21 @@ class Room(val id: String,
         }
     }
 
-
     private fun addCheckBroadcast(cmdCount: AtomicInteger, protocol: Protocol, membersCount: Int) {
         val addAndGet = cmdCount.addAndGet(1)
 
         when (protocol.type) {
             Type.RequestKill.name -> killVoteList.add(protocol.killWho!!)
             Type.RequestBeat.name -> beatVoteList.add(protocol.beatWho!!)
+        }
+
+        if (addAndGet == 1) {
+            when (protocol.type) {
+                Type.RequestSwitchDay.name -> lastAction = Pair(Type.RequestDay.name, LocalDateTime.now().plusSeconds(30))
+                Type.RequestSwitchNight.name -> lastAction = Pair(Type.RequestNight.name, LocalDateTime.now().plusSeconds(30))
+                Type.RequestKill.name -> lastAction = Pair(Type.RequestKill.name, LocalDateTime.now().plusMinutes(3))
+                Type.RequestBeat.name -> lastAction = Pair(Type.RequestBeat.name, LocalDateTime.now().plusMinutes(3))
+            }
         }
 
         if (addAndGet == membersCount) {
