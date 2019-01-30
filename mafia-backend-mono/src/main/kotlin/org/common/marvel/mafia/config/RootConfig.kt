@@ -57,6 +57,8 @@ class RootConfig {
         }
 
         server.addEventListener(Channel.Bind.name, String::class.java) { client, data, ackSender ->
+            ackSender.sendAckData("${Channel.Bind.name} Receive")
+
             val bindCmd = JsonUtils.readValue<BindCmd>(data.toString())
 
             connectorManager.accountSessionMap[bindCmd.account] = client
@@ -64,16 +66,22 @@ class RootConfig {
         }
 
         server.addEventListener(Channel.Broadcast.name, String::class.java) { client, data, ackSender ->
+            ackSender.sendAckData("${Channel.Broadcast.name} Receive")
+
             server.allClients.forEach { it.sendEvent(Channel.Broadcast.name, data) }
         }
 
         server.addEventListener(Channel.Chat.name, String::class.java) { client, data, ackSender ->
+            ackSender.sendAckData("${Channel.Chat.name} Receive")
+
             val chatCmd = JsonUtils.readValue<ChatCmd>(data.toString())
 
             connectorManager.accountSessionMap[chatCmd.to]?.sendEvent(Channel.Chat.name, JsonUtils.writeValueAsString(ChatCmd(from = connectorManager.sessionAccountMap[client]!!, to = chatCmd.to, content = chatCmd.content)))
         }
 
         server.addEventListener(Channel.Game.name, String::class.java) { client, data, ackSender ->
+            ackSender.sendAckData("${Channel.Chat.name} Success")
+
             val protocol = JsonUtils.readValue<Protocol>(data.toString())
             when (protocol.type) {
                 Type.CreateRoom.name -> {
