@@ -1,25 +1,29 @@
 package org.common.marvel.mafia.config
 
+import com.corundumstudio.socketio.SocketIOClient
 import com.corundumstudio.socketio.SocketIOServer
+import org.common.marvel.mafia.component.Protocol
+import org.common.marvel.mafia.component.Room
 import org.common.marvel.mafia.component.Type
 import org.common.marvel.mafia.service.ConnectorManager
-import org.common.marvel.mafia.service.GameProtocol
 import org.common.marvel.mafia.util.JsonUtils
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.annotation.EnableScheduling
+import java.util.*
+import java.util.concurrent.ConcurrentLinkedQueue
 import javax.annotation.Resource
 
-data class LoginMsg(val account: String)
+data class BindCmd(val account: String)
+data class ChatCmd(val from: String, val to: String, val content: String)
 
-enum class Cmd {
+enum class Channel {
 
-    System,
-    Login,
-    Users,
-    Room,
+    Bind,
+    Broadcast,
     Game,
+    Chat
 
 }
 
@@ -41,30 +45,48 @@ class RootConfig {
 
         server.addConnectListener {
             connectorManager.onlineSession.add(it)
-            it.sendEvent(Cmd.System.name, """[SYSTEM]: Hello ! I'm server ! """)
         }
 
         server.addDisconnectListener {
             connectorManager.onlineSession.remove(it)
         }
 
-        server.addEventListener(Cmd.Login.name, String::class.java) { client, data, ackSender ->
-            val loginMsg = JsonUtils.readValue<LoginMsg>(data.toString())
+        server.addEventListener(Channel.Bind.name, String::class.java) { client, data, ackSender ->
+            val bindCmd = JsonUtils.readValue<BindCmd>(data.toString())
 
-            connectorManager.accountSessionMap[loginMsg.account] = client
-            connectorManager.sessionAccountMap[client] = loginMsg.account
-            client.sendEvent(Cmd.System.name, """[SYSTEM]: ${loginMsg.account} login success ! """)
+            connectorManager.accountSessionMap[bindCmd.account] = client
+            connectorManager.sessionAccountMap[client] = bindCmd.account
         }
 
-        server.addEventListener(Cmd.Game.name, String::class.java) { client, data, ackSender ->
-            val gameProtocol = JsonUtils.readValue<GameProtocol>(data.toString())
-            val gameRoom = connectorManager.idGameRoomMap[gameProtocol.roomId]
-            when (gameProtocol.name) {
-                Type.Join.name -> {
-                    connectorManager.sessionQueue.offer(client)
+        server.addEventListener(Channel.Broadcast.name, String::class.java) { client, data, ackSender ->
+            server.allClients.forEach { it.sendEvent(Channel.Broadcast.name, data) }
+        }
+
+        server.addEventListener(Channel.Game.name, String::class.java) { client, data, ackSender ->
+            val protocol = JsonUtils.readValue<Protocol>(data.toString())
+            when (protocol.name) {
+                Type.CreateRoom.name -> {
+                    val uuid = UUID.randomUUID().toString()
+                    val members = ConcurrentLinkedQueue<SocketIOClient>()
+                    members.offer(client)
+                    connectorManager.idRoomMap[uuid] = Room(id = uuid, members = members, werewolfMembers = ConcurrentLinkedQueue(), accountSessionMap = connectorManager.accountSessionMap, sessionAccountMap = connectorManager.sessionAccountMap)
+                    client.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = uuid, isPublic = protocol.isPublic)))
                 }
-                else -> gameRoom?.receiveCmd(client, gameProtocol)
+                Type.Join.name -> {
+                    if (protocol.roomId == null) {
+                        // random join
+                    } else {
+                        // try to join
+                    }
+                }
+                else -> connectorManager.idRoomMap[protocol.roomId]?.receive(client, protocol)
             }
+        }
+
+        server.addEventListener(Channel.Chat.name, String::class.java) { client, data, ackSender ->
+            val chatCmd = JsonUtils.readValue<ChatCmd>(data.toString())
+
+            connectorManager.accountSessionMap[chatCmd.to]?.sendEvent(Channel.Chat.name, JsonUtils.writeValueAsString(ChatCmd(from = connectorManager.sessionAccountMap[client]!!, to = chatCmd.to, content = chatCmd.content)))
         }
 
         return server
