@@ -1,6 +1,6 @@
 buildscript {
 	ext {
-		kotlinVersion = '1.2.71'
+		kotlinVersion = '1.3.20'
 		springBootVersion = '2.1.2.RELEASE'
 		gradleDockerVersion = '1.2'
 	}
@@ -27,12 +27,15 @@ sourceCompatibility = '1.8'
 
 repositories {
 	mavenCentral()
+	jcenter()
 }
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'com.corundumstudio.socketio:netty-socketio:1.7.12'
 
+	implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.0.1"
+	
 	implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
 	implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 	implementation "org.jetbrains.kotlin:kotlin-reflect"

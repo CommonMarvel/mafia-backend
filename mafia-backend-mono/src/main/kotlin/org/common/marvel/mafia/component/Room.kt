@@ -108,7 +108,7 @@ class Room(val id: String,
         }
     }
 
-    fun timeoutExecute() {
+    suspend fun timeoutExecute() {
         if (lastAction.first != Type.None.name && LocalDateTime.now().isAfter(lastAction.second)) {
             when (lastAction.first) {
                 Type.RequestStartGame.name -> processRequestStartGameCmd()
