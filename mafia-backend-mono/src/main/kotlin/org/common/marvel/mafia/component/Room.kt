@@ -4,9 +4,12 @@ import com.corundumstudio.socketio.SocketIOClient
 import org.common.marvel.mafia.config.Channel
 import org.common.marvel.mafia.util.JsonUtils
 import org.slf4j.LoggerFactory
+import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.streams.toList
+
+data class RoomIdName(val id: String, val name: String)
 
 class MemberInfo(var account: String? = null,
                  var character: String? = null,
@@ -14,6 +17,8 @@ class MemberInfo(var account: String? = null,
 
 class Protocol(var roomId: String? = null,
                var name: String? = null,
+               var type: String? = null,
+               var rooms: List<RoomIdName>? = null,
                var membersInfo: List<MemberInfo>? = null,
                var killWho: String? = null,
                var beatWho: String? = null,
@@ -21,18 +26,13 @@ class Protocol(var roomId: String? = null,
                var msg: String? = null,
                var isPublic: Boolean? = false)
 
-enum class Character {
-
-    Werewolf,
-    Human
-
-}
-
 enum class Type {
 
     RoomChat,
     WooChat,
     CreateRoom,
+    ListRooms,
+    LeaveRoom,
     Join,
     RequestStartGame,
     RequestSwitchDay,
@@ -44,24 +44,42 @@ enum class Type {
     RequestNight,
     Kill,
     Beat,
-    HuamnWin,
-    WerewolfWin
+    HumanWin,
+    WerewolfWin,
+
+}
+
+enum class Character {
+
+    Werewolf,
+    Human,
+
+}
+
+enum class MemberStatus {
+
+    Alive,
+    Dead,
 
 }
 
 class Room(val id: String,
+           val name: String,
            val members: ConcurrentLinkedQueue<SocketIOClient>,
            val werewolfMembers: ConcurrentLinkedQueue<SocketIOClient>,
+           val gameWerewolfCount: Int,
            val accountSessionMap: MutableMap<String, SocketIOClient>,
            val sessionAccountMap: MutableMap<SocketIOClient, String>
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    private var aliveMembersCount = members.size
-    var werewolfsCount = 0
+    private val random = Random(Date().time)
 
-    val membersInfo = mutableListOf<MemberInfo>()
+    private var aliveMembersCount = members.size
+    private var aliveWerewolfsCount = werewolfMembers.size
+
+    private val membersInfo = mutableListOf<MemberInfo>()
 
     private val requestStartGameCount = AtomicInteger()
     private val requestSwitchDayCount = AtomicInteger()
@@ -75,14 +93,14 @@ class Room(val id: String,
     private val beatVoteList = ArrayList<String>()
 
     fun receive(client: SocketIOClient, protocol: Protocol) {
-        when (protocol.name) {
+        when (protocol.type) {
             Type.RoomChat.name -> handleRoomChat(client, protocol)
             Type.WooChat.name -> handleWooChat(client, protocol)
-            Type.RequestStartGame.name -> addCheckBroadcast(requestStartGameCount, protocol)
-            Type.RequestSwitchDay.name -> addCheckBroadcast(requestSwitchDayCount, protocol)
-            Type.RequestSwitchNight.name -> addCheckBroadcast(requestSwitchNightCount, protocol)
-            Type.RequestKill.name -> addCheckBroadcast(requestKillCount, protocol)
-            Type.RequestBeat.name -> addCheckBeat(requestBeatCount, protocol)
+            Type.RequestStartGame.name -> addCheckBroadcast(requestStartGameCount, protocol, aliveMembersCount)
+            Type.RequestSwitchDay.name -> addCheckBroadcast(requestSwitchDayCount, protocol, aliveMembersCount)
+            Type.RequestSwitchNight.name -> addCheckBroadcast(requestSwitchNightCount, protocol, aliveMembersCount)
+            Type.RequestKill.name -> addCheckBroadcast(requestKillCount, protocol, aliveMembersCount)
+            Type.RequestBeat.name -> addCheckBroadcast(requestBeatCount, protocol, aliveWerewolfsCount)
         }
     }
 
@@ -90,68 +108,66 @@ class Room(val id: String,
 
     private fun handleRoomChat(client: SocketIOClient, protocol: Protocol) {
         members.forEach {
-            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, name = Type.RoomChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
+            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.RoomChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
         }
     }
 
     private fun handleWooChat(client: SocketIOClient, protocol: Protocol) {
         werewolfMembers.forEach {
-            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, name = Type.WooChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
+            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.WooChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
         }
     }
 
 
-    private fun addCheckBroadcast(cmdCount: AtomicInteger, protocol: Protocol) {
+    private fun addCheckBroadcast(cmdCount: AtomicInteger, protocol: Protocol, membersCount: Int) {
         val addAndGet = cmdCount.addAndGet(1)
 
-        when (protocol.name) {
+        when (protocol.type) {
             Type.RequestKill.name -> killVoteList.add(protocol.killWho!!)
+            Type.RequestBeat.name -> beatVoteList.add(protocol.beatWho!!)
         }
 
-        if (addAndGet == aliveMembersCount) {
-            cmdCount.addAndGet(-1 * aliveMembersCount)
+        if (addAndGet == membersCount) {
+            cmdCount.addAndGet(-1 * membersCount)
 
-            when (protocol.name) {
+            when (protocol.type) {
                 Type.RequestStartGame.name -> processRequestStartGameCmd()
                 Type.RequestSwitchDay.name -> processRequestSwitchDayCmd()
                 Type.RequestSwitchNight.name -> processRequestSwitchNightCmd()
                 Type.RequestKill.name -> processRequestKillCmd(members)
+                Type.RequestBeat.name -> processRequestBeatCmd(members)
             }
-        }
-    }
-
-    private fun addCheckBeat(cmdCount: AtomicInteger, protocol: Protocol) {
-        val addAndGet = cmdCount.addAndGet(1)
-
-        beatVoteList.add(protocol.beatWho!!)
-
-        if (addAndGet == werewolfsCount) {
-            cmdCount.addAndGet(-1 * werewolfsCount)
-
-            processRequestBeatCmd(members)
         }
     }
 
     private fun processRequestStartGameCmd() {
-        members.stream().forEach {
-            if (!deadSessionList.contains(it)) {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.StartGame.name, membersInfo = membersInfo)))
-            }
+        members.forEach { membersInfo.add(MemberInfo(sessionAccountMap[it], Character.Human.name, MemberStatus.Alive.name)) }
+        val chooseSet = HashSet<Int>()
+        chooseSet.add(random.nextInt(members.size))
+        while (chooseSet.size < gameWerewolfCount) {
+            chooseSet.add(random.nextInt(members.size))
+        }
+        chooseSet.forEach {
+            membersInfo[it].character = Character.Werewolf.name
+        }
+
+        members.forEach {
+            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.StartGame.name, membersInfo = membersInfo)))
         }
     }
 
     private fun processRequestSwitchDayCmd() {
-        members.stream().forEach {
+        members.forEach {
             if (!deadSessionList.contains(it)) {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.RequestDay.name, membersInfo = membersInfo)))
+                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.RequestDay.name, membersInfo = membersInfo)))
             }
         }
     }
 
     private fun processRequestSwitchNightCmd() {
-        members.stream().forEach {
+        members.forEach {
             if (!deadSessionList.contains(it)) {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.RequestNight.name, membersInfo = membersInfo)))
+                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.RequestNight.name, membersInfo = membersInfo)))
             }
         }
     }
@@ -162,8 +178,8 @@ class Room(val id: String,
         if (killSumPairList.size == 2 && killSumPairList[0].second == 1 && killSumPairList[1].second == 1) {
             log.info("break even, skippppp ...")
 
-            members.stream().forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.Kill.name, membersInfo = membersInfo, killWho = "Nobody")))
+            members.forEach {
+                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.Kill.name, membersInfo = membersInfo, killWho = "Nobody")))
             }
         } else {
             val sessionOfDead = accountSessionMap[killSumPairList[0].first]!!
@@ -171,31 +187,32 @@ class Room(val id: String,
             deadSessionList.add(sessionOfDead)
             aliveMembersCount -= 1
             if (werewolfMembers.contains(sessionOfDead)) {
-                werewolfsCount -= 1
+                aliveWerewolfsCount -= 1
             }
 
             membersInfo.forEach {
                 if (accountSessionMap[it.account]!! == sessionOfDead) {
-                    it.status = "Dead"
+                    it.status = MemberStatus.Dead.name
                 }
             }
 
-            members.stream().forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.Kill.name, membersInfo = membersInfo, killWho = killSumPairList[0].first)))
+            members.forEach {
+                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.Kill.name, membersInfo = membersInfo, killWho = killSumPairList[0].first)))
             }
 
             killVoteList.clear()
 
-            val aliveHumanSize = membersInfo.filter { it.character == Character.Human.name && it.status == "Alive" }.size
+            val aliveHumanSize = membersInfo.filter { it.character == Character.Human.name && it.status == MemberStatus.Alive.name }.size
+
             if (aliveMembersCount == aliveHumanSize) {
-                members.stream().forEach {
-                    it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.HuamnWin.name, membersInfo = membersInfo)))
+                members.forEach {
+                    it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
                 }
             }
-            val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == "Alive" }.size
-            if (aliveMembersCount == werewolfsCount && aliveMembersCount == aliveWerewolfSize) {
-                members.stream().forEach {
-                    it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.HuamnWin.name, membersInfo = membersInfo)))
+            val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == MemberStatus.Alive.name }.size
+            if (aliveMembersCount == aliveWerewolfsCount && aliveMembersCount == aliveWerewolfSize) {
+                members.forEach {
+                    it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
                 }
             }
         }
@@ -212,26 +229,26 @@ class Room(val id: String,
 
         membersInfo.forEach {
             if (accountSessionMap[it.account]!! == sessionOfDead) {
-                it.status = "Dead"
+                it.status = MemberStatus.Dead.name
             }
         }
 
-        members.stream().forEach {
-            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.Beat.name, membersInfo = membersInfo, beatWho = beatSumPairList[0].first)))
+        members.forEach {
+            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.Beat.name, membersInfo = membersInfo, beatWho = beatSumPairList[0].first)))
         }
 
         beatVoteList.clear()
 
-        val aliveHumanSize = membersInfo.filter { it.character == Character.Human.name && it.status == "Alive" }.size
+        val aliveHumanSize = membersInfo.filter { it.character == Character.Human.name && it.status == MemberStatus.Alive.name }.size
         if (aliveMembersCount == aliveHumanSize) {
-            members.stream().forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.HuamnWin.name, membersInfo = membersInfo)))
+            members.forEach {
+                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
             }
         }
-        val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == "Alive" }.size
-        if (aliveMembersCount == werewolfsCount && aliveMembersCount == aliveWerewolfSize) {
-            members.stream().forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, name = Type.HuamnWin.name, membersInfo = membersInfo)))
+        val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == MemberStatus.Alive.name }.size
+        if (aliveMembersCount == aliveWerewolfsCount && aliveMembersCount == aliveWerewolfSize) {
+            members.forEach {
+                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
             }
         }
     }
