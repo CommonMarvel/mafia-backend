@@ -2,6 +2,7 @@ package org.common.marvel.mafia.config
 
 import com.corundumstudio.socketio.SocketIOClient
 import com.corundumstudio.socketio.SocketIOServer
+import org.common.marvel.mafia.component.MemberInfo
 import org.common.marvel.mafia.component.Protocol
 import org.common.marvel.mafia.component.Room
 import org.common.marvel.mafia.component.RoomIdName
@@ -80,16 +81,20 @@ class RootConfig {
         }
 
         server.addEventListener(Channel.Game.name, String::class.java) { client, data, ackSender ->
-            ackSender.sendAckData("${Channel.Chat.name} Success")
-
             val protocol = JsonUtils.readValue<Protocol>(data.toString())
+
+            ackSender.sendAckData("${protocol.type} Receive")
+
             when (protocol.type) {
                 Type.CreateRoom.name -> {
                     val uuid = UUID.randomUUID().toString()
                     val members = ConcurrentLinkedQueue<SocketIOClient>()
                     members.offer(client)
                     connectorManager.idRoomMap[uuid] = Room(id = uuid, name = protocol.name!!, members = members, werewolfMembers = ConcurrentLinkedQueue(), gameWerewolfCount = gameWerewolfCount, accountSessionMap = connectorManager.accountSessionMap, sessionAccountMap = connectorManager.sessionAccountMap)
-                    client.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = uuid, name = protocol.name, type = Type.CreateRoom.name, isPublic = protocol.isPublic)))
+
+                    val membersInfo = members.map { MemberInfo(connectorManager.sessionAccountMap[it], "", "") }.toList()
+
+                    client.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = uuid, name = protocol.name, type = Type.CreateRoom.name, membersInfo = membersInfo, isPublic = protocol.isPublic)))
                 }
                 Type.ListRooms.name -> {
                     // TODO : all entries is bad
@@ -99,12 +104,18 @@ class RootConfig {
                 Type.Join.name -> {
                     if (connectorManager.idRoomMap[protocol.roomId!!]!!.members.size < gameMemberCount) {
                         connectorManager.idRoomMap[protocol.roomId!!]!!.members.offer(client)
-                        client.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.Join.name, msg = "Success")))
+
+                        val membersInfo = connectorManager.idRoomMap[protocol.roomId!!]!!.members.map { MemberInfo(connectorManager.sessionAccountMap[it], "", "") }.toList()
+
+                        client.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.Join.name, membersInfo = membersInfo, msg = "Success")))
+                    } else {
+                        client.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.Join.name, msg = "Fail, Room is Full")))
                     }
                 }
                 Type.LeaveRoom.name -> {
                     connectorManager.idRoomMap[protocol.roomId]!!.members.remove(client)
                     connectorManager.idRoomMap[protocol.roomId]!!.werewolfMembers.remove(client)
+
                     client.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.LeaveRoom.name, msg = "Success")))
                 }
                 else -> connectorManager.idRoomMap[protocol.roomId]?.receive(client, protocol)
