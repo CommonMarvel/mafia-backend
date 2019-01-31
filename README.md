@@ -10,3 +10,13 @@
 ![](./doc/open-project2.png)
 * uncheck "Create separate module per source set"
 ![](./doc/import-project.png)
+
+## License
+[MIT License][license-page]
+
+Copyright (c) 2019 CommonMarvel
+
+[:arrow_up: back to top][top-page]
+
+[license-page]: <https://github.com/CommonMarvel/mafia-backend/blob/master/LICENSE>
+[top-page]: <https://github.com/CommonMarvel/mafia-backend#%EF%B8%8F-mafia-backend--->
