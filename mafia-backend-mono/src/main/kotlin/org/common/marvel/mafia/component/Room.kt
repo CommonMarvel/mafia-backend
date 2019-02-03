@@ -124,13 +124,13 @@ class Room(val id: String,
 
     private fun handleRoomChat(client: SocketIOClient, protocol: Protocol) {
         members.forEach {
-            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.RoomChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
+            it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.RoomChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
         }
     }
 
     private fun handleWooChat(client: SocketIOClient, protocol: Protocol) {
         werewolfMembers.forEach {
-            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.WooChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
+            it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = protocol.roomId, type = Type.WooChat.name, from = sessionAccountMap[client], msg = protocol.msg)))
         }
     }
 
@@ -176,14 +176,14 @@ class Room(val id: String,
         }
 
         members.forEach {
-            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.StartGame.name, membersInfo = membersInfo)))
+            it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.StartGame.name, membersInfo = membersInfo)))
         }
     }
 
     private fun processRequestSwitchDayCmd() {
         members.forEach {
             if (!deadSessionList.contains(it)) {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.RequestDay.name, membersInfo = membersInfo)))
+                it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.RequestDay.name, membersInfo = membersInfo)))
             }
         }
     }
@@ -191,7 +191,7 @@ class Room(val id: String,
     private fun processRequestSwitchNightCmd() {
         members.forEach {
             if (!deadSessionList.contains(it)) {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.RequestNight.name, membersInfo = membersInfo)))
+                it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.RequestNight.name, membersInfo = membersInfo)))
             }
         }
     }
@@ -203,7 +203,7 @@ class Room(val id: String,
             log.info("break even, skippppp ...")
 
             members.forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.Kill.name, membersInfo = membersInfo, killWho = "Nobody")))
+                it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.Kill.name, membersInfo = membersInfo, killWho = "Nobody")))
             }
         } else {
             val sessionOfDead = accountSessionMap[killSumPairList[0].first]!!
@@ -221,7 +221,7 @@ class Room(val id: String,
             }
 
             members.forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.Kill.name, membersInfo = membersInfo, killWho = killSumPairList[0].first)))
+                it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.Kill.name, membersInfo = membersInfo, killWho = killSumPairList[0].first)))
             }
 
             killVoteList.clear()
@@ -230,13 +230,13 @@ class Room(val id: String,
 
             if (aliveMembersCount == aliveHumanSize) {
                 members.forEach {
-                    it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
+                    it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
                 }
             }
             val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == MemberStatus.Alive.name }.size
             if (aliveMembersCount == aliveWerewolfsCount && aliveMembersCount == aliveWerewolfSize) {
                 members.forEach {
-                    it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
+                    it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
                 }
             }
         }
@@ -258,7 +258,7 @@ class Room(val id: String,
         }
 
         members.forEach {
-            it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.Beat.name, membersInfo = membersInfo, beatWho = beatSumPairList[0].first)))
+            it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.Beat.name, membersInfo = membersInfo, beatWho = beatSumPairList[0].first)))
         }
 
         beatVoteList.clear()
@@ -266,13 +266,13 @@ class Room(val id: String,
         val aliveHumanSize = membersInfo.filter { it.character == Character.Human.name && it.status == MemberStatus.Alive.name }.size
         if (aliveMembersCount == aliveHumanSize) {
             members.forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
+                it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
             }
         }
         val aliveWerewolfSize = membersInfo.filter { it.character == Character.Werewolf.name && it.status == MemberStatus.Alive.name }.size
         if (aliveMembersCount == aliveWerewolfsCount && aliveMembersCount == aliveWerewolfSize) {
             members.forEach {
-                it.sendEvent(Channel.Game.name, JsonUtils.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
+                it.sendEvent(Channel.Game.name, JsonUtils.jsonMapper.writeValueAsString(Protocol(roomId = id, type = Type.HumanWin.name, membersInfo = membersInfo)))
             }
         }
     }

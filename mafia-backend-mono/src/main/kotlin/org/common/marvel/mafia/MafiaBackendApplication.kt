@@ -11,4 +11,3 @@ fun main(args: Array<String>) {
     val applicationContext = runApplication<MafiaBackendApplication>(*args)
     applicationContext.getBean(ConnectorService::class.java).start()
 }
-
