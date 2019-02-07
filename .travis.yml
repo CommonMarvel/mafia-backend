@@ -15,4 +15,4 @@ cache:
   - $HOME/.gradle
 
 script:
-  - cd mafia-backend-mono && ./gradlew build -x test
+  - cd mafia-backend-mono && ./gradlew build
