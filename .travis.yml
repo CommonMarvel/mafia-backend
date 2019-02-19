@@ -6,13 +6,19 @@ jdk:
 os:
   - linux
 
+services:
+  - docker
+
 branches:
   only:
     - master
 
 cache:
   directories:
-  - $HOME/.gradle
+    - $HOME/.gradle
 
 script:
-  - cd mafia-backend-mono && ./gradlew build
+  - cd mafia-backend-mono && ./gradlew buildDocker
+  - docker tag common-marvel/mafia-backend-mono:0.0.1 jianminhuang/mafia-backend-mono:latest
+  - docker login -u$DOCKER_HUB_ACCOUNT -p$DOCKER_HUB_PASSWORD
+  - docker push jianminhuang/mafia-backend-mono:latest
